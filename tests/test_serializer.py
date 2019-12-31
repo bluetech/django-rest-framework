@@ -106,10 +106,10 @@ class TestSerializer:
             serializer.data
 
     def test_data_access_before_save_raises_error(self):
-        def create(validated_data):
-            return validated_data
-        serializer = self.Serializer(data={'char': 'abc', 'integer': 123})
-        serializer.create = create
+        class Serializer(self.Serializer):
+            def create(validated_data):
+                return validated_data
+        serializer = Serializer(data={'char': 'abc', 'integer': 123})
         assert serializer.is_valid()
         assert serializer.data == {'char': 'abc', 'integer': 123}
         with pytest.raises(AssertionError):

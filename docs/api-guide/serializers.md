@@ -1064,49 +1064,6 @@ Additionally, the following caveats apply to serializer inheritance:
 
     However, you can only use this technique to opt out from a field defined declaratively by a parent class; it won’t prevent the `ModelSerializer` from generating a default field. To opt-out from default fields, see [Specifying which fields to include](#specifying-which-fields-to-include).
 
-## Dynamically modifying fields
-
-Once a serializer has been initialized, the dictionary of fields that are set on the serializer may be accessed using the `.fields` attribute.  Accessing and modifying this attribute allows you to dynamically modify the serializer.
-
-Modifying the `fields` argument directly allows you to do interesting things such as changing the arguments on serializer fields at runtime, rather than at the point of declaring the serializer.
-
-### Example
-
-For example, if you wanted to be able to set which fields should be used by a serializer at the point of initializing it, you could create a serializer class like so:
-
-    class DynamicFieldsModelSerializer(serializers.ModelSerializer):
-        """
-        A ModelSerializer that takes an additional `fields` argument that
-        controls which fields should be displayed.
-        """
-
-        def __init__(self, *args, **kwargs):
-            # Don't pass the 'fields' arg up to the superclass
-            fields = kwargs.pop('fields', None)
-
-            # Instantiate the superclass normally
-            super(DynamicFieldsModelSerializer, self).__init__(*args, **kwargs)
-
-            if fields is not None:
-                # Drop any fields that are not specified in the `fields` argument.
-                allowed = set(fields)
-                existing = set(self.fields)
-                for field_name in existing - allowed:
-                    self.fields.pop(field_name)
-
-This would then allow you to do the following:
-
-    >>> class UserSerializer(DynamicFieldsModelSerializer):
-    >>>     class Meta:
-    >>>         model = User
-    >>>         fields = ['id', 'username', 'email']
-    >>>
-    >>> print(UserSerializer(user))
-    {'id': 2, 'username': 'jonwatts', 'email': 'jon@example.com'}
-    >>>
-    >>> print(UserSerializer(user, fields=('id', 'email')))
-    {'id': 2, 'email': 'jon@example.com'}
-
 ## Customizing the default fields
 
 REST framework 2 provided an API to allow developers to override how a `ModelSerializer` class would automatically generate the default set of fields.

@@ -351,6 +351,8 @@ class Field:
 
         if validators is not None:
             self.validators = list(validators)
+        else:
+            self.validators = self.get_validators()
 
         # These are set up by `.bind()` when the field is added to a serializer.
         self.field_name = None
@@ -362,6 +364,49 @@ class Field:
             messages.update(getattr(cls, 'default_error_messages', {}))
         messages.update(error_messages or {})
         self.error_messages = messages
+
+        self.frozen = True
+
+    frozen = False
+    def __setattr__(self, key, value):
+        if self.frozen and key not in (
+            # CharField.__init__, ChoiceField.__init__, _UnvalidatedField.__init__ (OK!)
+            'allow_blank',
+            # _UnvalidatedField.__init__ (OK!)
+            'allow_null',
+            # DecimalField.__init__ (OK!)
+            'rounding',
+            # SlugField.__init__ (OK!)
+            'allow_unicode',
+
+            # Field.bind
+            'field_name',
+            'parent',
+            'label',
+            'source',
+            'source_attrs',
+
+            # SerializerMethodField.bind
+            'method_name',
+
+            # BaseSerializer.is_valid
+            # ListSerializer.is_valid
+            '_validated_data',
+            '_errors',
+
+            # BaseSerializer.data (getter of property `data`)
+            '_data',
+
+            # BaseSerializer.save
+            'instance',
+
+            # Tests only.
+            'partial',
+            '_context',
+            'reverse',
+        ):
+            raise Exception('HO NO: {} {}'.format(key, value))
+        object.__setattr__(self, key, value)
 
     def bind(self, field_name, parent):
         """
@@ -396,18 +441,6 @@ class Field:
             self.source_attrs = []
         else:
             self.source_attrs = self.source.split('.')
-
-    # .validators is a lazily loaded property, that gets its default
-    # value from `get_validators`.
-    @property
-    def validators(self):
-        if not hasattr(self, '_validators'):
-            self._validators = self.get_validators()
-        return self._validators
-
-    @validators.setter
-    def validators(self, validators):
-        self._validators = validators
 
     def get_validators(self):
         return list(self.default_validators)
@@ -1433,7 +1466,16 @@ class ChoiceField(Field):
     html_cutoff_text = _('More than {count} items...')
 
     def __init__(self, choices, **kwargs):
-        self.choices = choices
+        self.grouped_choices = to_choices_dict(choices)
+        self.choices = flatten_choices_dict(self.grouped_choices)
+
+        # Map the string representation of choices to the underlying value.
+        # Allows us to deal with eg. integer choices while supporting either
+        # integer or string input, but still get the correct datatype out.
+        self.choice_strings_to_values = {
+            str(key): key for key in self.choices
+        }
+
         self.html_cutoff = kwargs.pop('html_cutoff', self.html_cutoff)
         self.html_cutoff_text = kwargs.pop('html_cutoff_text', self.html_cutoff_text)
 
@@ -1464,22 +1506,6 @@ class ChoiceField(Field):
             cutoff=self.html_cutoff,
             cutoff_text=self.html_cutoff_text
         )
-
-    def _get_choices(self):
-        return self._choices
-
-    def _set_choices(self, choices):
-        self.grouped_choices = to_choices_dict(choices)
-        self._choices = flatten_choices_dict(self.grouped_choices)
-
-        # Map the string representation of choices to the underlying value.
-        # Allows us to deal with eg. integer choices while supporting either
-        # integer or string input, but still get the correct datatype out.
-        self.choice_strings_to_values = {
-            str(key): key for key in self.choices
-        }
-
-    choices = property(_get_choices, _set_choices)
 
 
 class MultipleChoiceField(ChoiceField):
